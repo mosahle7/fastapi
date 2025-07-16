@@ -8,7 +8,7 @@ import time
 from sqlalchemy.orm import Session
 from . import models
 from .database import engine, get_db
-from .schemas import PostBase, CreatePost, PostResponse
+from .schemas import PostBase, CreatePost, PostResponse, User, UserResponse
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -93,3 +93,45 @@ def update_post(id: int, updated_post: CreatePost, db: Session = Depends(get_db)
     db.commit()
     return post_query.first()
 
+
+@app.get("/users", status_code = status.HTTP_200_OK, response_model=List[UserResponse])
+def get_users(db: Session = Depends(get_db)):
+    users = db.query(models.User).all()
+    return users
+
+@app.post("/users", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
+def create_user(user:User, db: Session = Depends(get_db)):
+    new_user = models.User(**user.model_dump())
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.get("/users/{id}", status_code=status.HTTP_200_OK, response_model=UserResponse)
+def get_user(id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id==id).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail = f"User with id: {id} does not exist!")
+    return user
+
+@app.delete("/users/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if user is None:
+         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail = f"User with id: {id} does not exist!")
+    db.delete(user)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@app.put("/users/{id}", status_code=status.HTTP_200_OK, response_model=UserResponse)
+def update_user(id: int, updated_user: User, db: Session = Depends(get_db)):
+    user_query = db.query(models.User).filter(models.User.id == id)
+    user = user_query.first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail = f"User with id: {id} does not exist!")
+    user_query.update(updated_user.model_dump(), synchronize_session = False)
+    db.commit()
+    return user_query.first()
